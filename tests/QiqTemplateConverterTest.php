@@ -7,11 +7,16 @@ namespace Koriym\QiqTemplateConverter;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 
+use function array_diff;
+use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
+use function is_dir;
 use function mkdir;
 use function rmdir;
+use function scandir;
 use function sys_get_temp_dir;
+use function uniqid;
 use function unlink;
 
 final class QiqTemplateConverterTest extends TestCase

@@ -7,11 +7,15 @@ namespace Koriym\QiqTemplateConverter;
 use InvalidArgumentException;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use SplFileInfo;
 
+use function assert;
+use function explode;
 use function file_get_contents;
 use function file_put_contents;
 use function fnmatch;
 use function is_dir;
+use function is_string;
 use function preg_replace;
 
 final class QiqTemplateConverter
@@ -47,15 +51,17 @@ final class QiqTemplateConverter
         }
     }
 
-    /** @return array<string> */
+    /** @return list<string> */
     private function findPhpFiles(string $directory): array
     {
         $files = [];
+        /** @var RecursiveIteratorIterator<RecursiveDirectoryIterator> $iterator */
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($directory, RecursiveDirectoryIterator::SKIP_DOTS),
         );
 
         foreach ($iterator as $file) {
+            assert($file instanceof SplFileInfo);
             if ($file->isFile() && $file->getExtension() === 'php') {
                 $filePath = $file->getPathname();
 
@@ -85,33 +91,46 @@ final class QiqTemplateConverter
     private function processFile(string $filePath): void
     {
         $content = file_get_contents($filePath);
+        if ($content === false) {
+            return;
+        }
+
         $originalContent = $content;
         $replacements = 0;
 
         // Convert Qiq syntax: {{...}} blocks
         // We need to apply this multiple times in case there are multiple $this-> in one block
+        $count = 0;
         do {
-            $prevContent = $content;
-            $content = preg_replace(
+            $result = preg_replace(
                 '/(\{\{[^}]*?)\$this->(\w+)([^}]*?\}\})/s',
                 '$1\$$2$3',
                 $content,
                 -1,
                 $count,
             );
-            $replacements += $count;
+            if (! is_string($result)) {
+                break;
+            }
+
+            $content = $result;
+            $replacements += (int) $count;
         } while ($count > 0);
 
         // Convert PHP syntax: $this->variable (but not $this->method())
         // Exclude method calls by using negative lookahead for (
-        $content = preg_replace(
+        $count = 0;
+        $result = preg_replace(
             '/\$this->(\w+)\b(?!\s*\()/s',
             '\$$1',
             $content,
             -1,
             $count,
         );
-        $replacements += $count;
+        if (is_string($result)) {
+            $content = $result;
+            $replacements += (int) $count;
+        }
 
         if ($replacements > 0) {
             $this->filesProcessed++;
@@ -144,8 +163,8 @@ final class QiqTemplateConverter
 
         foreach ($modifiedLines as $i => $line) {
             if (isset($originalLines[$i]) && $originalLines[$i] !== $line) {
-                echo "  - " . $originalLines[$i] . "\n";
-                echo "  + " . $line . "\n";
+                echo '  - ' . $originalLines[$i] . "\n";
+                echo '  + ' . $line . "\n";
             }
         }
 
